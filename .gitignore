@@ -1,0 +1,23 @@
+# 虚拟环境（你项目里两个环境文件夹全部忽略）
+venv/
+.venv/
+
+# Python缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code本地配置（每个人编辑器设置不同，不用上传）
+.vscode/
+
+# 临时日志文件
+*.log
+*.tmp
+
+# 系统残留文件
+.DS_Store
+Thumbs.db
+
+# 密钥/环境配置（防止隐私泄露）
+.env

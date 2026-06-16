@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识孪生地图</title>
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+body{
+    font-family:"Microsoft YaHei",sans-serif;
+    background:#f2f2f2;
+    min-height:100vh;
+    padding-bottom:60px;
+}
+h1{
+    text-align:center;
+    margin-top:30px;
+    font-size:48px;
+    font-weight:bold;
+}
+#replanBtn{
+    position:fixed;
+    top:30px;
+    right:30px;
+    padding:12px 24px;
+    background:#2196F3;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+    box-shadow:0 0 10px rgba(0,0,0,0.2);
+    z-index:1000;
+    transition:0.2s;
+}
+#replanBtn:hover{
+    background:#1976D2;
+    transform:scale(1.05);
+}
+#map{
+    width:100%;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:60px;
+    margin-top:80px;
+    flex-wrap:wrap;
+    padding:0 40px;
+}
+/* 圆形节点统一基础样式 */
+.node{
+    width:180px;
+    height:180px;
+    border-radius:50%;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    color:#fff;
+    font-weight:bold;
+    transition:transform 0.5s ease;
+    box-shadow:0 0 25px rgba(0,0,0,0.3);
+}
+.node:hover{
+    transform:scale(1.08);
+}
+/* 知识点文字容器：强制统一行高、自动换行、居中 */
+.topic-text{
+    width:140px;
+    text-align:center;
+    line-height:1.3;
+    word-break:break-all;
+}
+.percent{
+    margin-top:12px;
+    font-size:24px;
+}
+/* 颜色分级 */
+.red{background:#ff0000;}
+.yellow{background:#ffd700;color:#000;}
+.green{background:#0a8f08;}
+#statusPanel{
+    margin:60px auto 0 auto;
+    background:#fff;
+    padding:24px 30px;
+    border-radius:12px;
+    box-shadow:0 0 15px rgba(0,0,0,0.2);
+    width:fit-content;
+    min-width:320px;
+}
+#statusPanel h3{
+    margin-bottom:18px;
+    text-align:center;
+    font-size:20px;
+}
+.statusItem{
+    margin-bottom:10px;
+    font-size:16px;
+    line-height:1.4;
+}
+.empty-tip{
+    width:100%;
+    text-align:center;
+    font-size:22px;
+    color:#666;
+    padding:60px 0;
+}
+</style>
+</head>
+<body>
+<h1>知识孪生地图</h1>
+<button id="replanBtn" onclick="handleReplan()">重新规划薄弱点</button>
+<div id="map"></div>
+<div id="statusPanel">
+    <h3>实时掌握度（本次学习路径）</h3>
+    <div id="status"></div>
+</div>
+
+<script>
+// 根据分数返回背景色
+function getColorClass(score){
+    if(score <= 30) return "red";
+    if(score <=70) return "yellow";
+    return "green";
+}
+
+// 核心：统一字体缩放公式，所有圆圈文字视觉大小均衡
+function calcTopicFontSize(textStr){
+    const baseFont = 22;
+    const minFont = 12;
+    const maxFont = 26;
+    // 文字越长字体越小，线性缩放
+    let size = baseFont - (textStr.length * 0.65);
+    size = Math.max(size, minFont);
+    size = Math.min(size, maxFont);
+    return size + "px";
+}
+
+// 刷新地图数据
+async function updateKnowledgeMap(){
+    const mapBox = document.getElementById("map");
+    const statusBox = document.getElementById("status");
+    mapBox.innerHTML = "";
+    statusBox.innerHTML = "";
+    try{
+        const res = await fetch("http://127.0.0.1:5000/api/get_status");
+        const data = await res.json();
+        const topicKeys = Object.keys(data);
+        // 无知识点空白提示（刚启动默认空白）
+        if(topicKeys.length === 0){
+            mapBox.innerHTML = `<div class="empty-tip">暂无学习路径，请运行学习程序生成目标知识点</div>`;
+            statusBox.innerHTML = `<div class="statusItem">无待学习知识点</div>`;
+            return;
+        }
+        // 批量渲染圆形节点
+        topicKeys.forEach(topic => {
+            const score = data[topic];
+            const circle = document.createElement("div");
+            circle.className = `node ${getColorClass(score)}`;
+            // 字体严格计算统一
+            const fontSize = calcTopicFontSize(topic);
+            circle.innerHTML = `
+                <div class="topic-text" style="font-size:${fontSize}">${topic}</div>
+                <div class="percent">${score}%</div>
+            `;
+            mapBox.appendChild(circle);
+        });
+        // 渲染右侧状态面板
+        let statusHtml = "";
+        topicKeys.forEach(key=>{
+            statusHtml += `<div class="statusItem">${key}：${data[key]}%</div>`;
+        });
+        statusBox.innerHTML = statusHtml;
+    }catch(err){
+        console.error("后端连接异常：",err);
+        mapBox.innerHTML = `<div class="empty-tip" style="color:red">请先在终端运行 backend.py 启动后端服务</div>`;
+        statusBox.innerHTML = `<div class="statusItem" style="color:red">服务未连接</div>`;
+    }
+}
+
+// 点击重规划按钮
+async function handleReplan(){
+    try{
+        const res = await fetch("http://127.0.0.1:5000/api/replan",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({student_id:"student001"})
+        });
+        const result = await res.json();
+        alert(result.message);
+        updateKnowledgeMap();
+    }catch(err){
+        alert("重规划失败，请检查后端是否启动");
+    }
+}
+
+// 页面加载立刻刷新，每5秒自动轮询更新
+window.onload = updateKnowledgeMap;
+setInterval(updateKnowledgeMap, 5000);
+</script>
+</body>
+</html>
